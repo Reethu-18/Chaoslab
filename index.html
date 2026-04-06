@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ChaosLab — Control Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0A0C10;
+  --bg2:#0F1218;
+  --bg3:#141820;
+  --bg4:#1A1F2B;
+  --border:#1E2535;
+  --border2:#252D3D;
+  --text:#E8EDF5;
+  --muted:#6B7A99;
+  --faint:#3D4860;
+  --indigo:#5B6EE8;
+  --indigo-dim:#2A3270;
+  --indigo-glow:rgba(91,110,232,0.15);
+  --green:#00D68F;
+  --green-dim:#003D28;
+  --green-glow:rgba(0,214,143,0.12);
+  --red:#FF4757;
+  --red-dim:#3D0B10;
+  --red-glow:rgba(255,71,87,0.15);
+  --amber:#FFB84D;
+  --amber-dim:#3D2800;
+  --amber-glow:rgba(255,184,77,0.12);
+  --cyan:#00C8FF;
+}
+html{scroll-behavior:smooth}
+body{font-family:'IBM Plex Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* ── HEADER ── */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;height:54px;
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:200;
+}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-ring{
+  width:28px;height:28px;border-radius:50%;
+  border:2px solid var(--indigo);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.logo-ring::after{
+  content:'';width:8px;height:8px;background:var(--indigo);
+  border-radius:50%;animation:corePulse 2s infinite;
+}
+@keyframes corePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.6)}}
+.logo-name{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;letter-spacing:-.3px;color:var(--text)}
+.logo-name span{color:var(--indigo)}
+.header-status{display:flex;align-items:center;gap:20px}
+.sys-indicator{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);letter-spacing:.5px}
+.sys-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.sys-dot.warn{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.sys-dot.crit{background:var(--red);box-shadow:0 0 8px var(--red)}
+.header-time{font-size:11px;color:var(--faint);letter-spacing:1px}
+.nav-tabs{display:flex;align-items:center;gap:2px}
+.nav-tab{
+  padding:6px 16px;border-radius:5px;font-size:11.5px;font-weight:500;
+  color:var(--muted);cursor:pointer;transition:all .2s;border:none;
+  background:none;font-family:'IBM Plex Mono',monospace;letter-spacing:.3px;
+}
+.nav-tab:hover{color:var(--text);background:var(--bg3)}
+.nav-tab.active{color:var(--indigo);background:var(--indigo-dim)}
+
+/* ── LAYOUT ── */
+.layout{display:grid;grid-template-columns:1fr 340px;height:calc(100vh - 54px);overflow:hidden}
+.main-pane{overflow-y:auto;display:flex;flex-direction:column}
+.right-pane{border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+
+/* ── PANEL HEADER ── */
+.panel-head{
+  padding:14px 20px 12px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.panel-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600}
+.panel-badge{font-size:10px;padding:2px 9px;border-radius:3px;font-weight:600;letter-spacing:.5px}
+.panel-badge.live{background:rgba(0,214,143,.12);color:var(--green);border:1px solid rgba(0,214,143,.2)}
+.panel-badge.idle{background:var(--bg4);color:var(--faint);border:1px solid var(--border)}
+
+/* ── VIEW CONTAINERS ── */
+.view{display:none;flex:1;flex-direction:column}
+.view.active{display:flex}
+
+/* ════════════════════════════════════════
+   VIEW 1 — SYSTEM MAP
+════════════════════════════════════════ */
+#view-map{padding:0}
+.map-canvas{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:32px;position:relative;
+}
+.map-bg{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(91,110,232,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(91,110,232,.03) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+.service-map{display:flex;align-items:center;justify-content:center;gap:0;position:relative;z-index:1;width:100%}
+.svc-node{
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+  position:relative;
+}
+.svc-bubble{
+  width:120px;height:120px;border-radius:50%;
+  border:2px solid var(--green);
+  background:var(--green-dim);
+  box-shadow:0 0 24px var(--green-glow),inset 0 0 20px rgba(0,214,143,.05);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;cursor:default;
+  transition:all .4s cubic-bezier(.34,1.56,.64,1);
+  position:relative;
+}
+.svc-bubble::before{
+  content:'';position:absolute;inset:-4px;border-radius:50%;
+  border:1px solid rgba(0,214,143,.2);
+  animation:ringPulse 3s infinite;
+}
+@keyframes ringPulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:0;transform:scale(1.08)}}
+.svc-bubble.dead{
+  border-color:var(--red);background:var(--red-dim);
+  box-shadow:0 0 24px var(--red-glow),inset 0 0 20px rgba(255,71,87,.05);
+}
+.svc-bubble.dead::before{border-color:rgba(255,71,87,.3);animation:ringPulseRed 1s infinite}
+@keyframes ringPulseRed{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:0;transform:scale(1.1)}}
+.svc-bubble.warn{
+  border-color:var(--amber);background:var(--amber-dim);
+  box-shadow:0 0 24px var(--amber-glow),inset 0 0 20px rgba(255,184,77,.05);
+}
+.svc-bubble.warn::before{border-color:rgba(255,184,77,.3);animation:ringPulseAmb 1.5s infinite}
+@keyframes ringPulseAmb{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:0;transform:scale(1.08)}}
+.svc-icon{font-size:24px;line-height:1}
+.svc-bname{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text)}
+.svc-bstatus{font-size:10px;color:var(--green);letter-spacing:.5px}
+.svc-bubble.dead .svc-bstatus{color:var(--red)}
+.svc-bubble.warn .svc-bstatus{color:var(--amber)}
+.svc-label{font-size:10px;color:var(--muted);letter-spacing:.5px;text-align:center}
+.svc-timer{font-size:11px;color:var(--red);font-weight:600;height:16px;letter-spacing:.5px}
+
+.connector{
+  display:flex;align-items:center;padding:0 8px;
+  flex-shrink:0;position:relative;
+}
+.conn-line{
+  width:70px;height:2px;background:var(--green);
+  position:relative;overflow:hidden;
+}
+.conn-line::after{
+  content:'';position:absolute;top:0;left:-40px;
+  width:40px;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(0,214,143,.8),transparent);
+  animation:dataFlow 2s linear infinite;
+}
+@keyframes dataFlow{to{left:110px}}
+.conn-line.dead{background:var(--faint)}
+.conn-line.dead::after{display:none}
+.conn-arrow{
+  width:0;height:0;
+  border-top:5px solid transparent;
+  border-bottom:5px solid transparent;
+  border-left:8px solid var(--green);
+}
+.conn-arrow.dead{border-left-color:var(--faint)}
+
+/* Gateway node at left */
+.gateway-node{
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+  margin-right:16px;
+}
+.gateway-bubble{
+  width:100px;height:100px;border-radius:12px;
+  border:2px solid var(--indigo);
+  background:var(--indigo-dim);
+  box-shadow:0 0 24px var(--indigo-glow);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;
+}
+.services-cluster{display:flex;flex-direction:column;gap:24px;margin-left:16px}
+
+/* ── MAP STATS BAR ── */
+.map-stats{
+  padding:12px 24px;border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:0;background:var(--bg2);
+  flex-shrink:0;
+}
+.mstat{
+  flex:1;text-align:center;padding:0 16px;
+}
+.mstat+.mstat{border-left:1px solid var(--border)}
+.mstat-val{font-size:22px;font-weight:600;letter-spacing:-1px;color:var(--text)}
+.mstat-val.green{color:var(--green)}
+.mstat-val.red{color:var(--red)}
+.mstat-val.amber{color:var(--amber)}
+.mstat-label{font-size:9px;color:var(--faint);letter-spacing:1.5px;text-transform:uppercase;margin-top:3px}
+
+/* ════════════════════════════════════════
+   VIEW 2 — CHAOS CONTROL
+════════════════════════════════════════ */
+#view-chaos{padding:0;gap:0}
+.chaos-body{padding:24px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:20px}
+.chaos-section-title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.fault-list{display:flex;flex-direction:column;gap:8px}
+.fault-toggle{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;cursor:pointer;transition:all .2s;
+}
+.fault-toggle:hover{border-color:var(--border2)}
+.fault-toggle.selected{border-color:var(--red);background:rgba(255,71,87,.06)}
+.fault-left{display:flex;align-items:center;gap:12px}
+.fault-icon{width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.fault-icon.kill{background:rgba(255,71,87,.12)}
+.fault-icon.delay{background:rgba(255,184,77,.12)}
+.fault-icon.cpu{background:rgba(91,110,232,.12)}
+.fault-icon.loss{background:rgba(0,200,255,.12)}
+.fault-name{font-size:13px;font-weight:600;color:var(--text);letter-spacing:-.2px}
+.fault-desc{font-size:10.5px;color:var(--muted);margin-top:2px;letter-spacing:.2px}
+.fault-check{
+  width:20px;height:20px;border-radius:4px;border:2px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;transition:all .2s;
+  flex-shrink:0;
+}
+.fault-toggle.selected .fault-check{background:var(--red);border-color:var(--red)}
+.fault-check-inner{width:10px;height:10px;background:#fff;clip-path:polygon(14% 44%,0 65%,50% 100%,100% 16%,80% 0,43% 62%);opacity:0;transition:opacity .2s}
+.fault-toggle.selected .fault-check-inner{opacity:1}
+
+.target-select-wrap{position:relative}
+.target-select{
+  width:100%;background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;padding:12px 16px;color:var(--text);
+  font-family:'IBM Plex Mono',monospace;font-size:13px;
+  appearance:none;cursor:pointer;transition:border-color .2s;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7A99' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 14px center;
+  padding-right:36px;
+}
+.target-select:focus{outline:none;border-color:var(--indigo)}
+.target-select option{background:var(--bg3)}
+
+.intensity-row{display:flex;align-items:center;gap:12px}
+.intensity-label{font-size:10px;color:var(--muted);letter-spacing:.5px;white-space:nowrap}
+.intensity-slider{
+  flex:1;appearance:none;height:4px;border-radius:2px;
+  background:var(--bg4);border:none;outline:none;cursor:pointer;
+}
+.intensity-slider::-webkit-slider-thumb{
+  appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--indigo);cursor:pointer;border:2px solid var(--bg2);
+}
+.intensity-val{font-size:12px;font-weight:600;color:var(--indigo);min-width:32px;text-align:right}
+
+.run-btn{
+  width:100%;padding:16px;border-radius:10px;
+  background:var(--red);border:none;cursor:pointer;
+  font-family:'Syne',sans-serif;font-size:15px;font-weight:800;
+  color:#fff;letter-spacing:-.2px;
+  transition:all .2s;position:relative;overflow:hidden;
+}
+.run-btn::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.1),transparent);
+}
+.run-btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,71,87,.3)}
+.run-btn:active{transform:translateY(0)}
+.run-btn:disabled{background:var(--faint);cursor:not-allowed;box-shadow:none;transform:none}
+.run-btn-inner{display:flex;align-items:center;justify-content:center;gap:10px;position:relative;z-index:1}
+.run-icon{width:18px;height:18px}
+
+.abort-btn{
+  width:100%;padding:11px;border-radius:8px;
+  background:none;border:1px solid var(--border2);cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;
+  color:var(--muted);transition:all .2s;
+}
+.abort-btn:hover{border-color:var(--amber);color:var(--amber)}
+.abort-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* ════════════════════════════════════════
+   VIEW 3 — EKG MONITORING
+════════════════════════════════════════ */
+#view-ekg{gap:0}
+.ekg-body{flex:1;padding:20px;display:flex;flex-direction:column;gap:20px;overflow-y:auto}
+.chart-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:18px}
+.chart-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.chart-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.chart-val{font-size:18px;font-weight:600;letter-spacing:-1px}
+.chart-val.green{color:var(--green)}
+.chart-val.red{color:var(--red)}
+.chart-val.amber{color:var(--amber)}
+.chart-val.cyan{color:var(--cyan)}
+.chart-canvas-wrap{position:relative;height:80px}
+canvas.ekg-chart{width:100%;height:80px;display:block}
+
+.recovery-section{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:18px}
+.rec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.rec-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.rec-time{font-size:14px;color:var(--amber);font-weight:600}
+.progress-track{height:8px;background:var(--bg4);border-radius:4px;overflow:hidden;margin-bottom:8px}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--amber),var(--green));border-radius:4px;transition:width .5s;width:0%}
+.rec-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--faint);letter-spacing:.5px}
+
+.ekg-metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ekg-metric{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px}
+.em-label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.em-val{font-size:20px;font-weight:600;letter-spacing:-1px}
+
+/* ════════════════════════════════════════
+   VIEW 4 — POST-MORTEM
+════════════════════════════════════════ */
+#view-report{gap:0}
+.report-body{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:20px}
+.score-card{
+  background:var(--bg3);border:1px solid var(--border);border-radius:12px;
+  padding:24px;display:flex;align-items:center;gap:20px;
+}
+.score-ring-wrap{flex-shrink:0}
+.score-ring{width:90px;height:90px;position:relative}
+.score-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.score-ring-bg{fill:none;stroke:var(--bg4);stroke-width:6}
+.score-ring-fill{fill:none;stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset 1s ease}
+.score-letter{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;font-size:30px;font-weight:800;
+}
+.score-details{}
+.score-grade-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.score-headline{font-size:16px;font-weight:600;letter-spacing:-.3px;margin-bottom:5px}
+.score-sub{font-size:11px;color:var(--muted);line-height:1.7}
+
+.report-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.rs{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center}
+.rs-val{font-size:18px;font-weight:600;letter-spacing:-1px;margin-bottom:4px}
+.rs-label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint)}
+
+.timeline-section{}
+.timeline-head{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--faint);margin-bottom:14px}
+.timeline{display:flex;flex-direction:column;gap:0}
+.tl-entry{display:flex;gap:14px;padding-bottom:18px;position:relative}
+.tl-entry:last-child{padding-bottom:0}
+.tl-left{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:14px}
+.tl-dot{width:12px;height:12px;border-radius:50%;border:2px solid;flex-shrink:0;margin-top:2px}
+.tl-dot.event{border-color:var(--red);background:var(--red-dim)}
+.tl-dot.circuit{border-color:var(--amber);background:var(--amber-dim)}
+.tl-dot.recover{border-color:var(--green);background:var(--green-dim)}
+.tl-dot.info{border-color:var(--indigo);background:var(--indigo-dim)}
+.tl-line{flex:1;width:1px;background:var(--border);margin-top:4px}
+.tl-entry:last-child .tl-line{display:none}
+.tl-content{}
+.tl-time{font-size:9px;color:var(--faint);letter-spacing:1px;margin-bottom:3px}
+.tl-msg{font-size:12px;color:var(--text);line-height:1.5;letter-spacing:.1px}
+.tl-sub{font-size:10.5px;color:var(--muted);margin-top:2px}
+
+.no-report{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:40px;text-align:center;color:var(--faint);
+}
+.no-report-icon{font-size:40px;opacity:.3}
+.no-report-txt{font-size:12px;line-height:1.7;max-width:220px}
+
+/* ════════════════════════════════════════
+   RIGHT PANE — LIVE LOG
+════════════════════════════════════════ */
+.log-pane{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.log-list{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:3px}
+.log-entry{
+  font-size:10.5px;display:flex;gap:10px;line-height:1.7;
+  border-radius:4px;padding:2px 4px;
+  animation:logIn .2s ease;
+}
+@keyframes logIn{from{opacity:0;transform:translateX(4px)}to{opacity:1;transform:none}}
+.log-entry:hover{background:var(--bg3)}
+.log-ts{color:var(--faint);flex-shrink:0;width:62px}
+.log-level{width:34px;flex-shrink:0;font-weight:600;text-align:center;font-size:9px;letter-spacing:.5px;padding-top:1px}
+.log-level.ok{color:var(--green)}
+.log-level.err{color:var(--red)}
+.log-level.warn{color:var(--amber)}
+.log-level.info{color:var(--cyan)}
+.log-msg{color:var(--muted);word-break:break-word}
+.log-entry.err .log-msg{color:rgba(255,71,87,.7)}
+.log-entry.ok .log-msg{color:rgba(0,214,143,.6)}
+
+.log-footer{
+  padding:10px 16px;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;background:var(--bg2);
+}
+.log-count{font-size:9px;color:var(--faint);letter-spacing:.5px}
+.clear-btn{
+  background:none;border:none;color:var(--faint);font-size:9px;
+  cursor:pointer;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px;
+  transition:color .2s;
+}
+.clear-btn:hover{color:var(--muted)}
+
+/* scrollbars */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:var(--border2)}
+
+/* experiment running indicator */
+.running-bar{
+  height:2px;background:linear-gradient(90deg,var(--red),var(--amber),var(--red));
+  background-size:200%;
+  animation:runBar 1.5s linear infinite;
+  display:none;
+}
+.running-bar.active{display:block}
+@keyframes runBar{0%{background-position:0%}100%{background-position:200%}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-ring"></div>
+    <span class="logo-name">Chaos<span>Lab</span></span>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('map',this)">System Map</button>
+    <button class="nav-tab" onclick="switchTab('chaos',this)">Chaos Control</button>
+    <button class="nav-tab" onclick="switchTab('ekg',this)">EKG Monitor</button>
+    <button class="nav-tab" onclick="switchTab('report',this)">Post-Mortem</button>
+  </div>
+  <div class="header-status">
+    <div class="sys-indicator">
+      <div class="sys-dot" id="global-dot"></div>
+      <span id="global-status">ALL SYSTEMS NOMINAL</span>
+    </div>
+    <div class="header-time" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<div class="running-bar" id="running-bar"></div>
+
+<div class="layout">
+  <!-- MAIN PANE (left) -->
+  <div class="main-pane">
+
+    <!-- VIEW 1: SYSTEM MAP -->
+    <div class="view active" id="view-map">
+      <div class="panel-head">
+        <span class="panel-title">Infrastructure / Service Map</span>
+        <span class="panel-badge live" id="map-badge">3 / 3 HEALTHY</span>
+      </div>
+      <div class="map-canvas">
+        <div class="map-bg"></div>
+        <div class="service-map">
+          <!-- Gateway -->
+          <div class="gateway-node">
+            <div class="gateway-bubble" id="bubble-gateway">
+              <div style="font-size:22px">🌐</div>
+              <div style="font-size:10px;font-weight:600;letter-spacing:1px;color:#A5B4FC">GATEWAY</div>
+              <div style="font-size:9px;color:#6B7A99">:80</div>
+            </div>
+            <div style="font-size:9px;color:var(--faint);letter-spacing:.5px">API Gateway</div>
+          </div>
+
+          <!-- Connector Gateway→ cluster -->
+          <div class="connector">
+            <div class="conn-line" id="conn-gateway" style="width:50px"></div>
+            <div class="conn-arrow" id="arr-gateway"></div>
+          </div>
+
+          <!-- Services cluster -->
+          <div class="services-cluster">
+            <!-- Auth -->
+            <div class="svc-node">
+              <div class="svc-bubble" id="bubble-auth">
+                <div class="svc-icon">🔐</div>
+                <div class="svc-bname">AUTH</div>
+                <div class="svc-bstatus" id="status-auth">HEALTHY</div>
+              </div>
+              <div class="svc-label">Auth Service · :8001</div>
+              <div class="svc-timer" id="timer-auth"></div>
+            </div>
+            <!-- Product -->
+            <div class="svc-node">
+              <div class="svc-bubble" id="bubble-product">
+                <div class="svc-icon">📦</div>
+                <div class="svc-bname">PRODUCT</div>
+                <div class="svc-bstatus" id="status-product">HEALTHY</div>
+              </div>
+              <div class="svc-label">Product Service · :8002</div>
+              <div class="svc-timer" id="timer-product"></div>
+            </div>
+            <!-- Order -->
+            <div class="svc-node">
+              <div class="svc-bubble" id="bubble-order">
+                <div class="svc-icon">🛒</div>
+                <div class="svc-bname">ORDER</div>
+                <div class="svc-bstatus" id="status-order">HEALTHY</div>
+              </div>
+              <div class="svc-label">Order Service · :8003</div>
+              <div class="svc-timer" id="timer-order"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="map-stats">
+        <div class="mstat"><div class="mstat-val green" id="ms-healthy">3</div><div class="mstat-label">Healthy</div></div>
+        <div class="mstat"><div class="mstat-val red" id="ms-failed">0</div><div class="mstat-label">Failed</div></div>
+        <div class="mstat"><div class="mstat-val amber" id="ms-degraded">0</div><div class="mstat-label">Degraded</div></div>
+        <div class="mstat"><div class="mstat-val cyan" id="ms-uptime">100%</div><div class="mstat-label">Uptime</div></div>
+        <div class="mstat"><div class="mstat-val" id="ms-exps">0</div><div class="mstat-label">Experiments</div></div>
+      </div>
+    </div>
+
+    <!-- VIEW 2: CHAOS CONTROL -->
+    <div class="view" id="view-chaos">
+      <div class="panel-head">
+        <span class="panel-title">Chaos Control Center</span>
+        <span class="panel-badge idle" id="chaos-badge">STANDBY</span>
+      </div>
+      <div class="chaos-body">
+        <div>
+          <div class="chaos-section-title">01 — Select Failure Type</div>
+          <div class="fault-list">
+            <div class="fault-toggle" onclick="selectFault(this,'kill')">
+              <div class="fault-left">
+                <div class="fault-icon kill">💀</div>
+                <div>
+                  <div class="fault-name">Kill Container</div>
+                  <div class="fault-desc">Terminates the service process — simulates crash</div>
+                </div>
+              </div>
+              <div class="fault-check"><div class="fault-check-inner"></div></div>
+            </div>
+            <div class="fault-toggle" onclick="selectFault(this,'delay')">
+              <div class="fault-left">
+                <div class="fault-icon delay">⏱</div>
+                <div>
+                  <div class="fault-name">Add Network Latency</div>
+                  <div class="fault-desc">Injects 500ms delay via tc — spikes response time</div>
+                </div>
+              </div>
+              <div class="fault-check"><div class="fault-check-inner"></div></div>
+            </div>
+            <div class="fault-toggle" onclick="selectFault(this,'cpu')">
+              <div class="fault-left">
+                <div class="fault-icon cpu">🔥</div>
+                <div>
+                  <div class="fault-name">Saturate CPU</div>
+                  <div class="fault-desc">Pegs CPU at 97% — tests resource exhaustion</div>
+                </div>
+              </div>
+              <div class="fault-check"><div class="fault-check-inner"></div></div>
+            </div>
+            <div class="fault-toggle" onclick="selectFault(this,'loss')">
+              <div class="fault-left">
+                <div class="fault-icon loss">📡</div>
+                <div>
+                  <div class="fault-name">Packet Loss</div>
+                  <div class="fault-desc">40% packet drop via iptables — degrades reliability</div>
+                </div>
+              </div>
+              <div class="fault-check"><div class="fault-check-inner"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="chaos-section-title">02 — Select Target Service</div>
+          <div class="target-select-wrap">
+            <select class="target-select" id="target-select">
+              <option value="">— Pick a target —</option>
+              <option value="auth">🔐 Auth Service (:8001)</option>
+              <option value="product">📦 Product Service (:8002)</option>
+              <option value="order">🛒 Order Service (:8003)</option>
+              <option value="random">🎲 Random Service</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <div class="chaos-section-title">03 — Experiment Duration</div>
+          <div class="intensity-row">
+            <span class="intensity-label">DURATION</span>
+            <input type="range" class="intensity-slider" id="duration-slider" min="5" max="30" value="10" oninput="document.getElementById('dur-val').textContent=this.value+'s'"/>
+            <span class="intensity-val" id="dur-val">10s</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="chaos-section-title">04 — Execute</div>
+          <button class="run-btn" id="run-btn" onclick="runExperiment()">
+            <div class="run-btn-inner">
+              <svg class="run-icon" viewBox="0 0 18 18" fill="none">
+                <circle cx="9" cy="9" r="8" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>
+                <polygon points="7,5.5 14,9 7,12.5" fill="white"/>
+              </svg>
+              RUN EXPERIMENT
+            </div>
+          </button>
+          <div style="height:10px"></div>
+          <button class="abort-btn" id="abort-btn" onclick="abortExperiment()" disabled>⬛ ABORT EXPERIMENT</button>
+        </div>
+
+        <div id="experiment-preview" style="display:none">
+          <div class="chaos-section-title">Experiment Preview</div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:11px;color:var(--muted);line-height:1.9">
+            <span id="preview-text"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 3: EKG MONITOR -->
+    <div class="view" id="view-ekg">
+      <div class="panel-head">
+        <span class="panel-title">Real-Time EKG / Monitoring</span>
+        <span class="panel-badge live" id="ekg-badge">LIVE</span>
+      </div>
+      <div class="ekg-body">
+        <div class="chart-card">
+          <div class="chart-head">
+            <span class="chart-title">Response Latency (ms)</span>
+            <span class="chart-val cyan" id="ekg-latency-val">42ms</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-latency" class="ekg-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-head">
+            <span class="chart-title">Success Rate (%)</span>
+            <span class="chart-val green" id="ekg-success-val">100%</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-success" class="ekg-chart"></canvas>
+          </div>
+        </div>
+        <div class="recovery-section">
+          <div class="rec-head">
+            <span class="rec-title">Recovery Timeline</span>
+            <span class="rec-time" id="rec-elapsed">—</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="recovery-bar"></div>
+          </div>
+          <div class="rec-labels">
+            <span>FAULT INJECTED</span>
+            <span id="rec-status">WAITING FOR EXPERIMENT</span>
+            <span>RECOVERED</span>
+          </div>
+        </div>
+        <div class="ekg-metrics">
+          <div class="ekg-metric">
+            <div class="em-label">P99 Latency</div>
+            <div class="em-val green" id="em-p99">42ms</div>
+          </div>
+          <div class="ekg-metric">
+            <div class="em-label">Error Rate</div>
+            <div class="em-val green" id="em-err">0.0%</div>
+          </div>
+          <div class="ekg-metric">
+            <div class="em-label">Circuit Trips</div>
+            <div class="em-val" id="em-circuit">0</div>
+          </div>
+          <div class="ekg-metric">
+            <div class="em-label">Recovery Time</div>
+            <div class="em-val" id="em-rto">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 4: POST-MORTEM -->
+    <div class="view" id="view-report">
+      <div class="panel-head">
+        <span class="panel-title">Post-Mortem Report</span>
+        <span class="panel-badge idle" id="report-badge">NO DATA</span>
+      </div>
+      <div class="report-body" id="report-body">
+        <div class="no-report" id="no-report">
+          <div class="no-report-icon">📋</div>
+          <div class="no-report-txt">Run an experiment first. The post-mortem report will appear here automatically.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANE: LIVE LOG -->
+  <div class="right-pane">
+    <div class="panel-head">
+      <span class="panel-title">System Logs</span>
+      <span class="panel-badge live">STREAM</span>
+    </div>
+    <div class="log-pane">
+      <div class="log-list" id="log-list"></div>
+      <div class="log-footer">
+        <span class="log-count" id="log-count">0 ENTRIES</span>
+        <button class="clear-btn" onclick="clearLogs()">CLEAR</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const state = {
+  services: {
+    auth: { status:'healthy', failTime:null, timerInt:null },
+    product: { status:'healthy', failTime:null, timerInt:null },
+    order: { status:'healthy', failTime:null, timerInt:null },
+  },
+  selectedFault: null,
+  running: false,
+  runAbort: false,
+  experiments: [],
+  currentExp: null,
+  totalDowntime: 0,
+  circuitTrips: 0,
+  latencyData: Array(60).fill(42),
+  successData: Array(60).fill(100),
+  logEntries: [],
+};
+
+// ═══════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════
+function pad(n){ return n.toString().padStart(2,'0') }
+function nowStr(){
+  const d=new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+setInterval(()=>{ document.getElementById('clock').textContent=nowStr(); },1000);
+
+// ═══════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════
+function switchTab(id, el){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ═══════════════════════════════════════════
+// LOGGING
+// ═══════════════════════════════════════════
+function addLog(level, msg){
+  const entry = { ts:nowStr(), level, msg };
+  state.logEntries.push(entry);
+  const list = document.getElementById('log-list');
+  const div = document.createElement('div');
+  div.className = 'log-entry '+level;
+  div.innerHTML = `<span class="log-ts">${entry.ts}</span><span class="log-level ${level}">${level.toUpperCase()}</span><span class="log-msg">${msg}</span>`;
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+  while(list.children.length > 120) list.removeChild(list.firstChild);
+  document.getElementById('log-count').textContent = state.logEntries.length + ' ENTRIES';
+}
+function clearLogs(){ document.getElementById('log-list').innerHTML=''; state.logEntries=[]; document.getElementById('log-count').textContent='0 ENTRIES'; }
+
+// seed
+function seedLogs(){
+  const seed=[
+    ['ok','[gateway] health check — 200 OK 11ms'],
+    ['ok','[auth] GET /verify — 200 OK 41ms'],
+    ['ok','[product] GET /items — 200 OK 38ms'],
+    ['ok','[order] POST /create — 200 OK 54ms'],
+    ['info','[engine] experiment_engine ready'],
+    ['ok','[prometheus] scrape complete — 4 targets'],
+  ];
+  seed.forEach((s,i) => setTimeout(()=>addLog(s[0],s[1]), i*200));
+}
+seedLogs();
+
+// ═══════════════════════════════════════════
+// SERVICE STATE
+// ═══════════════════════════════════════════
+function setServiceState(id, status){
+  const svc = state.services[id];
+  const oldStatus = svc.status;
+  svc.status = status;
+
+  const bubble = document.getElementById('bubble-'+id);
+  const statusEl = document.getElementById('status-'+id);
+  const timerEl = document.getElementById('timer-'+id);
+
+  bubble.className = 'svc-bubble' + (status==='dead'?' dead':status==='degraded'?' warn':'');
+  statusEl.textContent = status.toUpperCase();
+
+  if(status==='dead' || status==='degraded'){
+    if(!svc.failTime){ svc.failTime = Date.now(); }
+    clearInterval(svc.timerInt);
+    svc.timerInt = setInterval(()=>{
+      const elapsed = ((Date.now()-svc.failTime)/1000).toFixed(1);
+      timerEl.textContent = status==='dead' ? `↓ ${elapsed}s` : `⚠ ${elapsed}s`;
+    },100);
+  } else {
+    clearInterval(svc.timerInt);
+    svc.failTime = null;
+    timerEl.textContent = '';
+  }
+  updateMapStats();
+}
+
+function updateMapStats(){
+  let h=0,f=0,d=0;
+  Object.values(state.services).forEach(s=>{
+    if(s.status==='healthy')h++;
+    else if(s.status==='dead')f++;
+    else d++;
+  });
+  document.getElementById('ms-healthy').textContent = h;
+  document.getElementById('ms-failed').textContent = f;
+  document.getElementById('ms-degraded').textContent = d;
+  const uptime = h===3?'100%':(h===2?'67%':'33%');
+  document.getElementById('ms-uptime').textContent = uptime;
+
+  const badge = document.getElementById('map-badge');
+  if(f>0||d>0){
+    badge.textContent = `${f} FAILED · ${d} DEGRADED`;
+    badge.style.background='rgba(255,71,87,.12)';badge.style.color='var(--red)';badge.style.borderColor='rgba(255,71,87,.2)';
+  } else {
+    badge.textContent = '3 / 3 HEALTHY';
+    badge.style.background='';badge.style.color='';badge.style.borderColor='';
+  }
+
+  // global dot
+  const dot = document.getElementById('global-dot');
+  const gs = document.getElementById('global-status');
+  if(f>0){dot.className='sys-dot crit';gs.textContent='SYSTEM DEGRADED';}
+  else if(d>0){dot.className='sys-dot warn';gs.textContent='PARTIAL DEGRADATION';}
+  else{dot.className='sys-dot';gs.textContent='ALL SYSTEMS NOMINAL';}
+}
+
+function resetAllServices(){
+  ['auth','product','order'].forEach(id=>{
+    clearInterval(state.services[id].timerInt);
+    state.services[id]={status:'healthy',failTime:null,timerInt:null};
+    document.getElementById('bubble-'+id).className='svc-bubble';
+    document.getElementById('status-'+id).textContent='HEALTHY';
+    document.getElementById('timer-'+id).textContent='';
+  });
+  updateMapStats();
+}
+
+// ═══════════════════════════════════════════
+// CHAOS CONTROL
+// ═══════════════════════════════════════════
+let selectedFaultEl = null;
+function selectFault(el, type){
+  document.querySelectorAll('.fault-toggle').forEach(f=>f.classList.remove('selected'));
+  el.classList.add('selected');
+  state.selectedFault = type;
+  selectedFaultEl = el;
+  updatePreview();
+}
+
+function updatePreview(){
+  const fault = state.selectedFault;
+  const target = document.getElementById('target-select').value;
+  const dur = document.getElementById('duration-slider').value;
+  const preview = document.getElementById('experiment-preview');
+  if(!fault || !target){ preview.style.display='none'; return; }
+  preview.style.display='block';
+  const names={auth:'Auth Service',product:'Product Service',order:'Order Service',random:'a random service'};
+  const fnames={kill:'kill the container',delay:'inject 500ms network latency on',cpu:'saturate CPU of',loss:'drop 40% of packets to'};
+  document.getElementById('preview-text').innerHTML =
+    `→ Chaos controller will <strong style="color:var(--red)">${fnames[fault]}</strong> <strong style="color:var(--amber)">${names[target]}</strong> for <strong style="color:var(--cyan)">${dur} seconds</strong>.<br>→ Recovery time will be measured from fault injection to full health.<br>→ Results will populate the Post-Mortem report automatically.`;
+}
+document.getElementById('target-select').addEventListener('change', updatePreview);
+document.getElementById('duration-slider').addEventListener('input', updatePreview);
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function runExperiment(){
+  if(state.running) return;
+  const fault = state.selectedFault;
+  const targetRaw = document.getElementById('target-select').value;
+  if(!fault||!targetRaw){ addLog('warn','[ui] select a fault type and target first'); return; }
+
+  const targets = ['auth','product','order'];
+  const target = targetRaw==='random' ? targets[Math.floor(Math.random()*3)] : targetRaw;
+  const dur = parseInt(document.getElementById('duration-slider').value)*1000;
+  const expId = 'exp_'+Date.now().toString(36);
+
+  state.running = true;
+  state.runAbort = false;
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('abort-btn').disabled = false;
+  document.getElementById('chaos-badge').textContent = 'RUNNING';
+  document.getElementById('chaos-badge').style.background='rgba(255,71,87,.12)';
+  document.getElementById('chaos-badge').style.color='var(--red)';
+  document.getElementById('chaos-badge').style.borderColor='rgba(255,71,87,.2)';
+  document.getElementById('running-bar').classList.add('active');
+  document.getElementById('ms-exps').textContent = ++state.experiments.length;
+
+  const faultNames={kill:'Kill Container',delay:'Network Latency +500ms',cpu:'CPU Saturation',loss:'40% Packet Loss'};
+  const svcNames={auth:'Auth Service',product:'Product Service',order:'Order Service'};
+  const expStart = new Date();
+  const expStartStr = nowStr();
+
+  // Build experiment log
+  const expLog = [];
+  function logExp(type, msg, sub=''){
+    expLog.push({ time:nowStr(), type, msg, sub });
+  }
+
+  addLog('info',`[chaos] experiment ${expId} starting — fault: ${faultNames[fault]}, target: ${svcNames[target]}`);
+  logExp('info',`Experiment started`, `ID: ${expId} · Fault: ${faultNames[fault]} · Target: ${svcNames[target]}`);
+  await sleep(600);
+
+  if(state.runAbort){ endExperiment(target, expLog, expId, expStart); return; }
+
+  addLog('warn',`[chaos] injecting fault → ${target}-service`);
+  logExp('event',`${faultNames[fault]} injected on ${svcNames[target]}`, `Fault injection timestamp: ${nowStr()}`);
+
+  // Apply visual state
+  const faultStatus = fault==='kill'?'dead':'degraded';
+  setServiceState(target, faultStatus);
+
+  // Spike EKG
+  const faultStartMs = Date.now();
+  const spikeInt = setInterval(()=>{
+    if(fault==='kill'){
+      state.latencyData.push(500+Math.random()*200);
+      state.successData.push(Math.max(0,30+Math.random()*20));
+      document.getElementById('em-err').textContent='42.3%';
+      document.getElementById('em-err').className='em-val red';
+    } else if(fault==='delay'){
+      state.latencyData.push(500+Math.random()*300);
+      state.successData.push(75+Math.random()*10);
+      document.getElementById('em-err').textContent='12.1%';
+      document.getElementById('em-err').className='em-val amber';
+    } else {
+      state.latencyData.push(200+Math.random()*200);
+      state.successData.push(85+Math.random()*10);
+      document.getElementById('em-err').textContent='8.4%';
+      document.getElementById('em-err').className='em-val amber';
+    }
+    state.latencyData = state.latencyData.slice(-60);
+    state.successData = state.successData.slice(-60);
+    const lat = Math.round(state.latencyData[state.latencyData.length-1]);
+    const suc = Math.round(state.successData[state.successData.length-1]);
+    document.getElementById('ekg-latency-val').textContent = lat+'ms';
+    document.getElementById('ekg-latency-val').className = lat>200?'chart-val red':lat>100?'chart-val amber':'chart-val cyan';
+    document.getElementById('ekg-success-val').textContent = suc+'%';
+    document.getElementById('ekg-success-val').className = suc<80?'chart-val red':suc<95?'chart-val amber':'chart-val green';
+    document.getElementById('em-p99').textContent = lat+'ms';
+    document.getElementById('em-p99').className = lat>200?'em-val red':lat>100?'em-val amber':'em-val green';
+  },500);
+
+  // Recovery progress
+  document.getElementById('rec-status').textContent = 'FAULT ACTIVE — RECOVERING';
+  document.getElementById('rec-elapsed').textContent = '0.0s';
+  document.getElementById('rec-elapsed').style.color='var(--red)';
+  const recInt = setInterval(()=>{
+    const elapsed = (Date.now()-faultStartMs)/1000;
+    document.getElementById('rec-elapsed').textContent = elapsed.toFixed(1)+'s';
+    document.getElementById('recovery-bar').style.width = Math.min(95,elapsed/dur*1000*100)+'%';
+  },100);
+
+  await sleep(800);
+  if(!state.runAbort){
+    addLog('warn',`[circuit] circuit breaker OPEN — ${target}-service`);
+    logExp('circuit','Circuit breaker tripped',`Traffic redirected to fallback handler · Timestamp: ${nowStr()}`);
+    state.circuitTrips++;
+    document.getElementById('em-circuit').textContent = state.circuitTrips;
+  }
+
+  await sleep(400);
+  if(!state.runAbort) addLog('warn',`[gateway] rerouting traffic — fallback activated`);
+
+  await sleep(dur - 1500);
+
+  if(state.runAbort){
+    clearInterval(spikeInt); clearInterval(recInt);
+    endExperiment(target, expLog, expId, expStart, true);
+    return;
+  }
+
+  addLog('info',`[chaos] fault duration elapsed — initiating recovery`);
+  if(fault==='kill'){
+    addLog('info',`[docker] restarting ${target}-service container...`);
+    logExp('info',`Container restart initiated`,`Docker restart command sent to ${target}-service`);
+    await sleep(600);
+  }
+
+  addLog('ok',`[${target}] service health check — PASS`);
+  logExp('recover',`${svcNames[target]} recovered`,`Health check passed · Circuit breaker CLOSED · Timestamp: ${nowStr()}`);
+  const rto = ((Date.now()-faultStartMs)/1000).toFixed(1);
+
+  clearInterval(spikeInt); clearInterval(recInt);
+
+  // Normalize charts
+  for(let i=0;i<10;i++){
+    state.latencyData.push(38+Math.random()*12);
+    state.successData.push(99+Math.random()*1);
+  }
+  state.latencyData = state.latencyData.slice(-60);
+  state.successData = state.successData.slice(-60);
+  document.getElementById('ekg-latency-val').textContent = '42ms';
+  document.getElementById('ekg-latency-val').className = 'chart-val cyan';
+  document.getElementById('ekg-success-val').textContent = '100%';
+  document.getElementById('ekg-success-val').className = 'chart-val green';
+  document.getElementById('em-err').textContent = '0.0%';
+  document.getElementById('em-err').className = 'em-val green';
+  document.getElementById('em-p99').textContent = '42ms';
+  document.getElementById('em-p99').className = 'em-val green';
+  document.getElementById('em-rto').textContent = rto+'s';
+  document.getElementById('recovery-bar').style.width = '100%';
+  document.getElementById('rec-status').textContent = 'RECOVERED';
+  document.getElementById('rec-elapsed').textContent = rto+'s';
+  document.getElementById('rec-elapsed').style.color='var(--green)';
+
+  setServiceState(target,'healthy');
+  addLog('ok',`[monitor] experiment complete — RTO: ${rto}s`);
+  logExp('info',`Experiment complete`,`Recovery time (RTO): ${rto}s · Experiment ID: ${expId}`);
+
+  state.totalDowntime += parseFloat(rto);
+  endExperiment(target, expLog, expId, expStart, false, rto, fault);
+}
+
+function endExperiment(target, expLog, expId, startDate, aborted=false, rto='—', fault=null){
+  state.running = false;
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('abort-btn').disabled = true;
+  document.getElementById('chaos-badge').textContent = aborted?'ABORTED':'COMPLETE';
+  document.getElementById('chaos-badge').style.background=aborted?'rgba(255,184,77,.12)':'rgba(0,214,143,.12)';
+  document.getElementById('chaos-badge').style.color=aborted?'var(--amber)':'var(--green)';
+  document.getElementById('chaos-badge').style.borderColor=aborted?'rgba(255,184,77,.2)':'rgba(0,214,143,.2)';
+  document.getElementById('running-bar').classList.remove('active');
+
+  if(!aborted) buildReport(expLog, rto, fault, target);
+  setTimeout(()=>{
+    document.getElementById('chaos-badge').textContent='STANDBY';
+    document.getElementById('chaos-badge').style.background='';
+    document.getElementById('chaos-badge').style.color='';
+    document.getElementById('chaos-badge').style.borderColor='';
+  }, 4000);
+}
+
+function abortExperiment(){
+  state.runAbort = true;
+  addLog('warn','[chaos] experiment ABORTED by user');
+  resetAllServices();
+  // reset EKG
+  state.latencyData = state.latencyData.map(()=>40+Math.random()*10);
+  state.successData = state.successData.map(()=>99+Math.random());
+  document.getElementById('recovery-bar').style.width='0%';
+  document.getElementById('rec-status').textContent='ABORTED';
+  document.getElementById('rec-elapsed').textContent='—';
+}
+
+// ═══════════════════════════════════════════
+// REPORT BUILDER
+// ═══════════════════════════════════════════
+function buildReport(expLog, rto, fault, target){
+  const rtof = parseFloat(rto);
+  // Score: A if <2s, B if <4s, C if <7s, D if <12s, F otherwise
+  let grade='A', gradeColor=var_('green'), score=100, verdict='System recovered exceptionally fast.', detail='Circuit breaker and fallback routing performed within SLO.';
+  if(rtof>=2&&rtof<4){grade='B';gradeColor=var_('green');score=82;verdict='Good recovery — minor SLO impact.';detail='Response time exceeded threshold briefly. Recovery was smooth.'}
+  if(rtof>=4&&rtof<7){grade='C';gradeColor=var_('amber');score=64;verdict='Acceptable — SLO partially breached.';detail='Downtime exceeded 4 seconds. Investigate circuit breaker sensitivity.'}
+  if(rtof>=7&&rtof<12){grade='D';gradeColor=var_('amber');score=42;verdict='Poor resilience — significant downtime.';detail='Recovery time exceeded SLO. Review restart policies and health checks.'}
+  if(rtof>=12){grade='F';gradeColor=var_('red');score=18;verdict='Critical failure — system non-resilient.';detail='Recovery time severely breached SLO. Immediate architectural review required.'}
+
+  const circumference = 2*Math.PI*38;
+  const offset = circumference - (score/100)*circumference;
+
+  // Remove empty state
+  document.getElementById('no-report').remove();
+  document.getElementById('report-badge').textContent=`GRADE: ${grade}`;
+  document.getElementById('report-badge').style.background=gradeColor+'20';
+  document.getElementById('report-badge').style.color=gradeColor;
+  document.getElementById('report-badge').style.borderColor=gradeColor+'40';
+
+  const body = document.getElementById('report-body');
+  body.innerHTML = `
+    <div class="score-card">
+      <div class="score-ring-wrap">
+        <div class="score-ring">
+          <svg viewBox="0 0 90 90"><circle class="score-ring-bg" cx="45" cy="45" r="38"/><circle class="score-ring-fill" cx="45" cy="45" r="38" stroke="${gradeColor}" stroke-dasharray="${circumference}" stroke-dashoffset="${circumference}" id="ring-anim"/></svg>
+          <div class="score-letter" style="color:${gradeColor}">${grade}</div>
+        </div>
+      </div>
+      <div class="score-details">
+        <div class="score-grade-label">Resilience Score — ${score}/100</div>
+        <div class="score-headline">${verdict}</div>
+        <div class="score-sub">${detail}</div>
+      </div>
+    </div>
+    <div class="report-stats">
+      <div class="rs"><div class="rs-val" style="color:var(--cyan)">${rto}s</div><div class="rs-label">Recovery Time</div></div>
+      <div class="rs"><div class="rs-val" style="color:${grade==='A'?'var(--green)':'var(--amber)'}">${score}%</div><div class="rs-label">Resilience Score</div></div>
+      <div class="rs"><div class="rs-val" style="color:var(--red)">${state.circuitTrips}</div><div class="rs-label">Circuit Trips</div></div>
+    </div>
+    <div class="timeline-section">
+      <div class="timeline-head">Experiment Timeline</div>
+      <div class="timeline" id="report-timeline"></div>
+    </div>
+  `;
+
+  // Animate ring
+  setTimeout(()=>{
+    const ring = document.getElementById('ring-anim');
+    if(ring) ring.style.strokeDashoffset = offset;
+  },100);
+
+  // Build timeline
+  const tl = document.getElementById('report-timeline');
+  expLog.forEach(entry=>{
+    const div = document.createElement('div');
+    div.className='tl-entry';
+    div.innerHTML=`
+      <div class="tl-left">
+        <div class="tl-dot ${entry.type}"></div>
+        <div class="tl-line"></div>
+      </div>
+      <div class="tl-content">
+        <div class="tl-time">${entry.time}</div>
+        <div class="tl-msg">${entry.msg}</div>
+        ${entry.sub?`<div class="tl-sub">${entry.sub}</div>`:''}
+      </div>`;
+    tl.appendChild(div);
+  });
+
+  function var_(name){ return name==='green'?'#00D68F':name==='amber'?'#FFB84D':name==='red'?'#FF4757':'#00C8FF'; }
+}
+function var_(n){ return n==='green'?'#00D68F':n==='amber'?'#FFB84D':n==='red'?'#FF4757':'#00C8FF'; }
+
+// ═══════════════════════════════════════════
+// EKG CHARTS
+// ═══════════════════════════════════════════
+function drawChart(canvasId, data, color, min, max){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const dpr = window.devicePixelRatio||1;
+  const rect = canvas.getBoundingClientRect();
+  if(rect.width===0) return;
+  canvas.width = rect.width*dpr;
+  canvas.height = 80*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const W=rect.width, H=80;
+  ctx.clearRect(0,0,W,H);
+
+  // Grid lines
+  ctx.strokeStyle='rgba(255,255,255,.04)';
+  ctx.lineWidth=1;
+  for(let i=0;i<4;i++){
+    const y=i*(H/3);
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  }
+
+  // Line
+  const pts=data.slice(-60);
+  const step=W/(pts.length-1);
+  ctx.beginPath();
+  pts.forEach((v,i)=>{
+    const x=i*step;
+    const y=H-(((v-min)/(max-min))*H*0.85+H*0.075);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=color;
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+
+  // Fill
+  ctx.lineTo((pts.length-1)*step,H);ctx.lineTo(0,H);ctx.closePath();
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,color+'40');grad.addColorStop(1,'transparent');
+  ctx.fillStyle=grad;ctx.fill();
+
+  // Current dot
+  const lastV=pts[pts.length-1];
+  const lastX=(pts.length-1)*step;
+  const lastY=H-(((lastV-min)/(max-min))*H*0.85+H*0.075);
+  ctx.beginPath();ctx.arc(lastX,lastY,3.5,0,Math.PI*2);
+  ctx.fillStyle=color;ctx.fill();
+  ctx.beginPath();ctx.arc(lastX,lastY,6,0,Math.PI*2);
+  ctx.fillStyle=color+'30';ctx.fill();
+}
+
+// Push ambient data
+setInterval(()=>{
+  if(!state.running){
+    state.latencyData.push(38+Math.random()*12);
+    state.successData.push(99.5+Math.random()*.5);
+  }
+  state.latencyData=state.latencyData.slice(-60);
+  state.successData=state.successData.slice(-60);
+}, 1000);
+
+// Render loop
+setInterval(()=>{
+  drawChart('chart-latency', state.latencyData, '#00C8FF', 0, 700);
+  drawChart('chart-success', state.successData, '#00D68F', 0, 110);
+}, 800);
+
+// Force initial render after fonts load
+setTimeout(()=>{
+  drawChart('chart-latency', state.latencyData, '#00C8FF', 0, 700);
+  drawChart('chart-success', state.successData, '#00D68F', 0, 110);
+},400);
+
+// ═══════════════════════════════════════════
+// AMBIENT LOG STREAM
+// ═══════════════════════════════════════════
+const ambientLogs=[
+  ['ok','[auth] GET /verify — 200 OK'],
+  ['ok','[product] GET /items — 200 OK'],
+  ['ok','[order] POST /create — 200 OK'],
+  ['ok','[gateway] /health — 200 OK'],
+  ['ok','[prometheus] scrape — 4 targets OK'],
+  ['ok','[product] GET /catalog — 200 OK'],
+  ['ok','[auth] POST /login — 200 OK'],
+  ['ok','[order] GET /status — 200 OK'],
+];
+let ambI=0;
+setInterval(()=>{
+  if(!state.running){
+    const l=ambientLogs[ambI%ambientLogs.length];
+    addLog(l[0],l[1]);
+    ambI++;
+  }
+},3200);
+</script>
+</body>
+</html>
